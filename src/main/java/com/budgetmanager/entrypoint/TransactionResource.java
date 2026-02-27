@@ -5,6 +5,7 @@ import com.budgetmanager.application.CreateTransactionUseCase;
 import com.budgetmanager.application.GetTransactionUseCase;
 import com.budgetmanager.domain.Transaction;
 import com.budgetmanager.domain.TransactionType;
+import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -18,6 +19,7 @@ import java.util.Map;
 @Path("transactions")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
+@Authenticated
 public class TransactionResource {
 
 
@@ -30,8 +32,7 @@ public class TransactionResource {
     @Inject
     JsonWebToken jwt;
 
-    public record TransactionRequest(String userId, BigDecimal amount, TransactionType type, String categoryId,
-                                     String categoryName) {
+    public record TransactionRequest(BigDecimal amount, TransactionType type, String categoryId, String categoryName) {
     }
 
 //    @GET
@@ -42,7 +43,9 @@ public class TransactionResource {
     @POST
     public Response createTransaction(TransactionRequest transactionRequest) {
 
-        CreateTransactionCommand command = new CreateTransactionCommand(transactionRequest.userId, transactionRequest.amount, transactionRequest.type, transactionRequest.categoryId, transactionRequest.categoryName);
+        String loggedUserId = jwt.getSubject();
+
+        CreateTransactionCommand command = new CreateTransactionCommand(loggedUserId, transactionRequest.amount, transactionRequest.type, transactionRequest.categoryId, transactionRequest.categoryName);
 
         Transaction savedTransaction = createTransactionUseCase.execute(command);
 
@@ -52,11 +55,9 @@ public class TransactionResource {
     }
 
     @GET
-    public Response getTransactionsByUser(@QueryParam("userId") String userId) {
-        if (userId == null) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity("{\"error\": \"O parâmetro userId é obrigatório\"}").build();
-        }
+    public Response getTransactionsByUser() {
+
+        String userId = jwt.getSubject();
 
         List<Transaction> transactions = getTransactionUseCase.execute(userId);
         return Response.ok(transactions).build();
