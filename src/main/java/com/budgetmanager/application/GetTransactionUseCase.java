@@ -20,4 +20,13 @@ public class GetTransactionUseCase {
         }
         return transactionRepository.findByUserId(userId);
     }
+
+    public List<Transaction> executeByMonth(String userId, String month) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("ID do usuário não pode ser nulo");
+        } else if (month == null || month.isBlank()) {
+            throw new IllegalArgumentException("Mes não pode ser nulo");
+        }
+        return transactionRepository.findByUserIdAndMonth(userId, month);
+    }
 }

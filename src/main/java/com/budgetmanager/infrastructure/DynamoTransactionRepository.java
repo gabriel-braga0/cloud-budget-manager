@@ -36,12 +36,15 @@ public class DynamoTransactionRepository implements TransactionRepository {
         item.put("PK", AttributeValue.builder().s("USER#" + transaction.getUserId()).build());
         item.put("SK", AttributeValue.builder().s("TRANSACTION#" + transaction.getCreatedAt().toString()).build());
 
+        String yearMonth = transaction.getCreatedAt().toString().substring(0, 7);
+        item.put("GSI1PK", AttributeValue.builder().s("USER#" + transaction.getUserId() + "#MONTH#" + yearMonth).build());
+        item.put("GSI1SK", AttributeValue.builder().s("TRANSACTION#" + transaction.getCreatedAt().toString()).build());
+
         item.put("id", AttributeValue.builder().s(transaction.getId()).build());
         item.put("amount", AttributeValue.builder().n(transaction.getAmount().toString()).build());
         item.put("type", AttributeValue.builder().s(transaction.getType().name()).build());
         item.put("categoryId", AttributeValue.builder().s(transaction.getCategory().id()).build());
         item.put("categoryName", AttributeValue.builder().s(transaction.getCategory().name()).build());
-
         item.put("entityType", AttributeValue.builder().s("TRANSACTION").build());
 
         PutItemRequest putRequest = PutItemRequest.builder().tableName(tableName).item(item).build();
@@ -74,6 +77,40 @@ public class DynamoTransactionRepository implements TransactionRepository {
                     userId,
                     new BigDecimal(item.get("amount").n()),
                     TransactionType.valueOf(item.get("type").s()),
+                    category
+            );
+            transactions.add(transaction);
+        }
+
+        return transactions;
+    }
+
+    @Override
+    public List<Transaction> findByUserIdAndMonth(String userId, String yearMonth) {
+        String gsiPkValue = "USER#" + userId + "#MONTH#" + yearMonth;
+
+        QueryRequest queryRequest = QueryRequest.builder()
+                .tableName(tableName)
+                .indexName("GSI1")
+                .keyConditionExpression("GSI1PK = :pk")
+                .expressionAttributeValues(Map.of(
+                        ":pk", AttributeValue.builder().s(gsiPkValue).build()
+                ))
+                .build();
+
+        QueryResponse response = dynamoDbClient.query(queryRequest);
+        List<Transaction> transactions = new ArrayList<>();
+
+        for (Map<String, AttributeValue> item : response.items()) {
+            com.budgetmanager.domain.Category category = new com.budgetmanager.domain.Category(
+                    item.get("categoryId").s(),
+                    item.get("categoryName").s()
+            );
+
+            Transaction transaction = new Transaction(
+                    userId,
+                    new BigDecimal(item.get("amount").n()),
+                    com.budgetmanager.domain.TransactionType.valueOf(item.get("type").s()),
                     category
             );
             transactions.add(transaction);

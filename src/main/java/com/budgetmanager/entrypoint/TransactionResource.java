@@ -55,11 +55,16 @@ public class TransactionResource {
     }
 
     @GET
-    public Response getTransactionsByUser() {
+    public Response getTransactionsByUser(@QueryParam("month") String month) {
+        String loggedUserId = jwt.getSubject();
+        List<Transaction> transactions;
 
-        String userId = jwt.getSubject();
+        if (month != null && !month.isBlank()) {
+            transactions = getTransactionUseCase.executeByMonth(loggedUserId, month);
+        } else {
+            transactions = getTransactionUseCase.execute(loggedUserId);
+        }
 
-        List<Transaction> transactions = getTransactionUseCase.execute(userId);
         return Response.ok(transactions).build();
     }
 }
