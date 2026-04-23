@@ -1,0 +1,30 @@
+{
+  "realm": "budget-realm",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "budget-app",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true
+    }
+  ],
+  "users": [
+    {
+      "username": "dev@cloudbudget.com",
+      "enabled": true,
+      "email": "dev@cloudbudget.com",
+      "firstName": "Dev",
+      "lastName": "Cloud",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "SenhaForte123!",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}
