@@ -64,3 +64,22 @@ Resources:
             Condition:
               ArnEquals:
                 aws:SourceArn: !Ref ExpenseAlertTopic
+
+    ExpenseAlertLambda:
+      Type: AWS::Serverless::Function
+      Properties:
+        FunctionName: expense-alert-lambda
+        Handler: io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest
+        Runtime: java21
+        CodeUri: /tmp/target/function.zip
+        MemorySize: 512
+        Timeout: 15
+        Environment:
+          Variables:
+            QUARKUS_LAMBDA_HANDLER: expenseAlertLambda
+        Events:
+          SQSMessageTrigger:
+            Type: SQS
+            Properties:
+              Queue: !GetAtt ExpenseAlertQueue.Arn
+              BatchSize: 5

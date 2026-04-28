@@ -5,13 +5,15 @@ services:
     ports:
       - "127.0.0.1:4566:4566"
     environment:
-      - SERVICES=dynamodb,sns,sqs
+      - SERVICES=dynamodb,sns,sqs,cloudformation,logs
       - DEFAULT_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - LOCALSTACK_AUTH_TOKEN=${TOKEN}
     volumes:
     - ./init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh
+    - ./template.yaml:/tmp/template.yaml
+    - ../cloud-budget-worker/target:/tmp/target
 
   keycloak:
     image: quay.io/keycloak/keycloak:latest
