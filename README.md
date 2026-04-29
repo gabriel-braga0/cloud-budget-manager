@@ -66,28 +66,35 @@ sequenceDiagram
 
 ---
 
-### ▶️ Passo a Passo
+### Passo a Passo
 
-#### 1. Subir a Infraestrutura Base (LocalStack)
+#### 1. **Configurar as Variáveis de Ambiente:**
+   Crie um arquivo `.env` na raiz do projeto (junto ao `docker-compose.yml`) e insira suas credenciais locais e o seu token do LocalStack:
+   ```env
+   AWS_ACCESS_KEY_ID=test
+   AWS_SECRET_ACCESS_KEY=test
+   LOCALSTACK_AUTH_TOKEN=seu_token_aqui
+   ```
+#### 2. Subir a Infraestrutura Base (LocalStack)
 
 ```bash
 docker-compose up -d
 ```
 
-#### 2. Compilar a Imagem Nativa
+#### 3. Compilar a Imagem Nativa
 
 ```bash
 ./mvnw clean package -Pnative "-Dquarkus.native.container-build=true"
 ```
 
-#### 3. Deploy com Terraform
+#### 4. Deploy com Terraform
 
 ```bash
 terraform init
 terraform apply -auto-approve
 ```
 
-#### 4. Testar a API
+#### 5. Testar a API
 
 ```bash
 curl -X POST http://localhost:4566/_aws/execute-api/{API_ID}/dev/transactions \
