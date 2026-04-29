@@ -7,6 +7,7 @@ terraform {
   }
 }
 
+# 1. Provedor focado no LocalStack
 provider "aws" {
   region                      = "us-east-1"
   access_key                  = "test"
@@ -16,14 +17,16 @@ provider "aws" {
   skip_requesting_account_id  = true
 
   endpoints {
-    dynamodb = "http://localhost:4566"
-    sns      = "http://localhost:4566"
-    sqs      = "http://localhost:4566"
-    lambda   = "http://localhost:4566"
-    iam      = "http://localhost:4566"
+    dynamodb     = "http://localhost:4566"
+    sns          = "http://localhost:4566"
+    sqs          = "http://localhost:4566"
+    lambda       = "http://localhost:4566"
+    iam          = "http://localhost:4566"
+    apigateway = "http://localhost:4566"
   }
 }
 
+# 2. Infraestrutura de Dados (Reutilizada)
 resource "aws_dynamodb_table" "cloud_budget_table" {
   name           = "CloudBudgetTable"
   billing_mode   = "PAY_PER_REQUEST"
@@ -34,17 +37,14 @@ resource "aws_dynamodb_table" "cloud_budget_table" {
     name = "PK"
     type = "S"
   }
-
   attribute {
     name = "SK"
     type = "S"
   }
-
   attribute {
     name = "GSI1PK"
     type = "S"
   }
-
   attribute {
     name = "GSI1SK"
     type = "S"
@@ -72,26 +72,9 @@ resource "aws_sns_topic_subscription" "expense_alerts_sqs_target" {
   endpoint  = aws_sqs_queue.expense_alerts_queue.arn
 }
 
-resource "aws_sqs_queue_policy" "expense_alerts_queue_policy" {
-  queue_url = aws_sqs_queue.expense_alerts_queue.id
-  policy    = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect    = "Allow"
-        Principal = "*"
-        Action    = "sqs:SendMessage"
-        Resource  = aws_sqs_queue.expense_alerts_queue.arn
-        Condition = {
-          ArnEquals = { "aws:SourceArn" = aws_sns_topic.expense_alerts.arn }
-        }
-      }
-    ]
-  })
-}
-
+# 3. IAM Role para as Lambdas (API e Worker)
 resource "aws_iam_role" "lambda_exec_role" {
-  name = "expense_alert_lambda_role"
+  name = "budget_manager_lambda_role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -102,15 +85,86 @@ resource "aws_iam_role" "lambda_exec_role" {
   })
 }
 
+# 4. A Lambda da API (O Coração da V2)
+resource "aws_lambda_function" "budget_api_lambda" {
+  function_name = "budget-api-lambda"
+  role          = aws_iam_role.lambda_exec_role.arn
+  handler       = "io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest"
+  runtime       = "provided.al2023"
+  timeout       = 15
+  memory_size   = 128
+
+  filename         = "./target/function.zip"
+  source_code_hash = filebase64sha256("./target/function.zip")
+
+  environment {
+    variables = {
+      QUARKUS_LAMBDA_HANDLER = "rest"
+    }
+  }
+}
+
+# 5. O API Gateway V1 (REST API - Gratuito no LocalStack)
+resource "aws_api_gateway_rest_api" "budget_rest_api" {
+  name        = "budget-manager-api"
+  description = "API Serverless (V1) para gerenciamento de despesas"
+}
+
+# 5.1 Rota Coringa {proxy+}
+resource "aws_api_gateway_resource" "proxy_resource" {
+  rest_api_id = aws_api_gateway_rest_api.budget_rest_api.id
+  parent_id   = aws_api_gateway_rest_api.budget_rest_api.root_resource_id
+  path_part   = "{proxy+}"
+}
+
+# 5.2 Metodo ANY para o {proxy+}
+resource "aws_api_gateway_method" "proxy_method" {
+  rest_api_id   = aws_api_gateway_rest_api.budget_rest_api.id
+  resource_id   = aws_api_gateway_resource.proxy_resource.id
+  http_method   = "ANY"
+  authorization = "NONE"
+}
+
+# 5.3 Integração do proxy com a Lambda
+resource "aws_api_gateway_integration" "lambda_proxy_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.budget_rest_api.id
+  resource_id             = aws_api_gateway_resource.proxy_resource.id
+  http_method             = aws_api_gateway_method.proxy_method.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.budget_api_lambda.invoke_arn
+}
+
+# 5.4 Publicação (Deployment e Stage)
+resource "aws_api_gateway_deployment" "api_deployment" {
+  depends_on = [aws_api_gateway_integration.lambda_proxy_integration]
+  rest_api_id = aws_api_gateway_rest_api.budget_rest_api.id
+}
+
+resource "aws_api_gateway_stage" "api_stage" {
+  deployment_id = aws_api_gateway_deployment.api_deployment.id
+  rest_api_id   = aws_api_gateway_rest_api.budget_rest_api.id
+  stage_name    = "dev"
+}
+
+# 5.5 Permissão: Deixa o API Gateway invocar a Lambda
+resource "aws_lambda_permission" "api_gw_permission" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.budget_api_lambda.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.budget_rest_api.execution_arn}/*/*"
+}
+
+
+
+# 6. O Worker (Consumidor SQS) - Mantemos ele aqui
 resource "aws_lambda_function" "expense_alert_lambda" {
   function_name = "expense-alert-lambda"
   role          = aws_iam_role.lambda_exec_role.arn
   handler       = "io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest"
   runtime       = "java21"
-  timeout       = 15
-  memory_size   = 512
-
-  filename         = "../cloud-budget-worker/target/function.zip"
+  filename      = "../cloud-budget-worker/target/function.zip"
   source_code_hash = filebase64sha256("../cloud-budget-worker/target/function.zip")
 
   environment {
@@ -123,5 +177,9 @@ resource "aws_lambda_function" "expense_alert_lambda" {
 resource "aws_lambda_event_source_mapping" "sqs_to_lambda" {
   event_source_arn = aws_sqs_queue.expense_alerts_queue.arn
   function_name    = aws_lambda_function.expense_alert_lambda.arn
-  batch_size       = 5
+}
+
+# URL
+output "api_endpoint" {
+  value = aws_api_gateway_stage.api_stage.invoke_url
 }

@@ -1,9 +1,13 @@
 package com.budgetmanager.domain;
 
+import io.quarkus.runtime.annotations.RegisterForReflection;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+// Necessário para o Jackson conseguir serializar o JSON quando compilado em Imagem Nativa (GraalVM)
+@RegisterForReflection
 public class Transaction {
 
     private final String id;
