@@ -22,7 +22,7 @@ provider "aws" {
     sqs          = "http://localhost:4566"
     lambda       = "http://localhost:4566"
     iam          = "http://localhost:4566"
-    apigateway = "http://localhost:4566" # O motor do HTTP API
+    apigateway = "http://localhost:4566"
   }
 }
 
@@ -90,17 +90,16 @@ resource "aws_lambda_function" "budget_api_lambda" {
   function_name = "budget-api-lambda"
   role          = aws_iam_role.lambda_exec_role.arn
   handler       = "io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest"
-  runtime       = "java21"
-  timeout       = 30 # APIs podem demorar um pouco mais no Cold Start
-  memory_size   = 512
+  runtime       = "provided.al2023"
+  timeout       = 15
+  memory_size   = 128
 
-  # Apontando para o ZIP da API que agora tem a extensão lambda-rest
   filename         = "./target/function.zip"
   source_code_hash = filebase64sha256("./target/function.zip")
 
   environment {
     variables = {
-      QUARKUS_LAMBDA_HANDLER = "rest" # Handler padrão da extensão lambda-rest
+      QUARKUS_LAMBDA_HANDLER = "rest"
     }
   }
 }
@@ -118,7 +117,7 @@ resource "aws_api_gateway_resource" "proxy_resource" {
   path_part   = "{proxy+}"
 }
 
-# 5.2 Método ANY para o {proxy+}
+# 5.2 Metodo ANY para o {proxy+}
 resource "aws_api_gateway_method" "proxy_method" {
   rest_api_id   = aws_api_gateway_rest_api.budget_rest_api.id
   resource_id   = aws_api_gateway_resource.proxy_resource.id
@@ -131,7 +130,7 @@ resource "aws_api_gateway_integration" "lambda_proxy_integration" {
   rest_api_id             = aws_api_gateway_rest_api.budget_rest_api.id
   resource_id             = aws_api_gateway_resource.proxy_resource.id
   http_method             = aws_api_gateway_method.proxy_method.http_method
-  integration_http_method = "POST" # A AWS exige POST na integração com Lambda no V1
+  integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.budget_api_lambda.invoke_arn
 }
@@ -180,7 +179,7 @@ resource "aws_lambda_event_source_mapping" "sqs_to_lambda" {
   function_name    = aws_lambda_function.expense_alert_lambda.arn
 }
 
-# OUTPUT: A URL Mágica
+# URL
 output "api_endpoint" {
   value = aws_api_gateway_stage.api_stage.invoke_url
 }
