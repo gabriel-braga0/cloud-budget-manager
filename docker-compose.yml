@@ -5,7 +5,7 @@ services:
     ports:
       - "127.0.0.1:4566:4566"
     environment:
-      - SERVICES=dynamodb,sns,sqs,lambda,iam,logs
+      - SERVICES=dynamodb,sns,sqs,lambda,iam,logs,apigateway
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - LOCALSTACK_AUTH_TOKEN=${TOKEN}
